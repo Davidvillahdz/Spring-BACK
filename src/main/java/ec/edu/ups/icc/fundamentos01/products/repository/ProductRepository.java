@@ -1,8 +1,6 @@
 package ec.edu.ups.icc.fundamentos01.products.repository;
 
-import java.util.List;
-import java.util.Optional;
-
+import ec.edu.ups.icc.fundamentos01.products.models.ProductEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -11,48 +9,48 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import ec.edu.ups.icc.fundamentos01.products.models.ProductEntity;
+import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
 
         Optional<ProductEntity> findByName(String name);
 
+        Slice<ProductEntity> findBy(Pageable pageable);
+
         List<ProductEntity> findByOwnerId(Long userId);
 
-        // List<ProductEntity> findByCategoryId(Long categoryId);
-
-        /**
-         * Encuentra productos por nombre de usuario
-         * Genera JOIN automáticamente:
-         * SELECT p.* FROM products p JOIN users u ON p.user_id = u.id WHERE u.name = ?
-         */
-        List<ProductEntity> findByOwnerName(String ownerName);
-
-        /**
-         * Encuentra productos que tienen UNA categoría específica
-         * Útil para filtros de categoría
-         */
         List<ProductEntity> findByCategoriesId(Long categoryId);
 
-        /**
-         * Encuentra productos que tienen una categoría con nombre específico
-         */
-        List<ProductEntity> findByCategoriesName(String categoryName);
+        // ============== CONSULTAS CON FILTROS Y PAGINACIÓN ==============
 
         /**
-         * Consulta personalizada: productos con TODAS las categorías especificadas
+         * Busca productos con filtros opcionales y paginación.
          */
-        @Query("SELECT p FROM ProductEntity p " +
-                        "WHERE SIZE(p.categories) >= :categoryCount " +
-                        "AND :categoryCount = " +
-                        "(SELECT COUNT(c) FROM p.categories c WHERE c.id IN :categoryIds)")
-        List<ProductEntity> findByAllCategories(@Param("categoryIds") List<Long> categoryIds,
-                        @Param("categoryCount") long categoryCount);
+        @Query(value = "SELECT DISTINCT p FROM ProductEntity p " +
+                        "LEFT JOIN p.categories c " +
+                        "WHERE (COALESCE(:name, '') = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%'))) " +
+                        "AND (:minPrice IS NULL OR p.price >= :minPrice) " +
+                        "AND (:maxPrice IS NULL OR p.price <= :maxPrice) " +
+                        "AND (:categoryId IS NULL OR c.id = :categoryId)",
+
+                        countQuery = "SELECT count(DISTINCT p) FROM ProductEntity p " +
+                                        "LEFT JOIN p.categories c " +
+                                        "WHERE (COALESCE(:name, '') = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%'))) "
+                                        +
+                                        "AND (:minPrice IS NULL OR p.price >= :minPrice) " +
+                                        "AND (:maxPrice IS NULL OR p.price <= :maxPrice) " +
+                                        "AND (:categoryId IS NULL OR c.id = :categoryId)")
+        Page<ProductEntity> findWithFilters(
+                        @Param("name") String name,
+                        @Param("minPrice") Double minPrice,
+                        @Param("maxPrice") Double maxPrice,
+                        @Param("categoryId") Long categoryId,
+                        Pageable pageable);
 
         /**
-         * Consulta personalizada: productos de un usuario con filtros opcionales
-         * Permite filtrar por nombre, precio mínimo/máximo y categoría
+         * Busca productos DE UN USUARIO con filtros opcionales y paginación.
          */
         @Query("SELECT DISTINCT p FROM ProductEntity p " +
                         "LEFT JOIN p.categories c " +
@@ -61,19 +59,11 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
                         "AND (:minPrice IS NULL OR p.price >= :minPrice) " +
                         "AND (:maxPrice IS NULL OR p.price <= :maxPrice) " +
                         "AND (:categoryId IS NULL OR c.id = :categoryId)")
-        List<ProductEntity> findByOwnerIdWithFilters(
+        Page<ProductEntity> findByUserIdWithFilters(
                         @Param("userId") Long userId,
                         @Param("name") String name,
                         @Param("minPrice") Double minPrice,
                         @Param("maxPrice") Double maxPrice,
-                        @Param("categoryId") Long categoryId);
-
-        @Query("SELECT p FROM ProductEntity p " +
-                        "JOIN p.owner o WHERE LOWER(o.name) LIKE LOWER(CONCAT('%', :ownerName, '%'))")
-        Page<ProductEntity> findByOwnerNameContaining(@Param("ownerName") String ownerName, Pageable pageable);
-
-        Page<ProductEntity> findByCategoriesId(Long categories, Pageable pageable);
-
-        Slice<ProductEntity> findByCategoriesIdOrderByCreatedAtDesc(Long categoriesId, Pageable pageable);
-
+                        @Param("categoryId") Long categoryId,
+                        Pageable pageable);
 }
