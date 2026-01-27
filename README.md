@@ -57,3 +57,32 @@ Intento de acceso a un recurso protegido (`/api/users`) sin enviar el token JWT.
 El sistema intercepta la petición mediante `JwtAuthenticationEntryPoint` y responde con un **401 Unauthorized** y un mensaje de error estructurado, protegiendo los datos.
 **Endpoint:** `GET /api/users` (Sin Header Authorization)
 ![Acceso Denegado](./Images/auth_denied.png)
+## 🛡️ Control de Acceso por Roles (RBAC)
+
+Implementación de seguridad granular utilizando `@PreAuthorize`. Se diferencia entre usuarios normales y administradores.
+
+### 1. Protección de Rutas Administrativas
+Un usuario con `ROLE_USER` intenta acceder al endpoint de listado completo (`GET /api/products`), el cual está restringido solo para administradores.
+**Resultado:** El sistema deniega el acceso con un `403 Forbidden`.
+![Acceso Denegado por Rol](./Images/role_forbidden.png)
+
+### 2. Acceso de Administrador
+Un usuario con `ROLE_ADMIN` accede al mismo endpoint protegido.
+**Resultado:** El sistema permite el acceso y devuelve la data sensible.
+![Acceso Admin Permitido](./Images/role_admin_success.png) 
+![Acceso Paginado usuario normal](./Images/usuario.png)
+---
+
+## 👤 Validación de Ownership (Propiedad)
+
+Implementación de lógica de negocio para asegurar que **solo el dueño del recurso** (o un Admin) pueda modificarlo o eliminarlo.
+
+### 1. Modificación Legítima (Dueño)
+El usuario intenta modificar un producto que le pertenece (su ID coincide con el `owner_id` del producto).
+**Resultado:** Operación exitosa (`200 OK`).
+![Edición Exitosa](./Images/ownership_success.png)
+
+### 2. Bloqueo de Modificación Ilegítima (Seguridad)
+Un usuario intenta modificar un producto que **NO** le pertenece (intento de acceso cruzado). El servicio valida la propiedad antes de ejecutar la acción.
+**Resultado:** El sistema lanza una excepción de seguridad personalizada con el mensaje *"No puedes modificar productos ajenos"*.
+![Violación de Ownership](./Images/ownership_denied.png)
