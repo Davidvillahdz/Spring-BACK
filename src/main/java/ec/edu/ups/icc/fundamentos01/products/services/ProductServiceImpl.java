@@ -23,8 +23,12 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.models.Product;
 import ec.edu.ups.icc.fundamentos01.products.models.ProductEntity;
 import ec.edu.ups.icc.fundamentos01.products.repository.ProductRepository;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
 import ec.edu.ups.icc.fundamentos01.users.models.UserEntity;
 import ec.edu.ups.icc.fundamentos01.users.repository.UserRepository;
+
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.GrantedAuthority;
 
 @Service
 public class ProductServiceImpl implements ProductService {
@@ -124,23 +128,30 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public ProductResponseDto update(Long id, UpdateProductDto dto) {
+    public ProductResponseDto update(Long id, UpdateProductDto dto, UserDetailsImpl currentUser) {
         ProductEntity existing = productRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("Producto no encontrado con ID: " + id));
+
+        validateOwnership(existing, currentUser);
+
         Set<CategoryEntity> categories = validateAndGetCategories(dto.categoryIds);
         Product product = Product.fromEntity(existing);
         product.update(dto);
+
         ProductEntity updated = product.toEntity(existing.getOwner(), categories);
         updated.setId(id);
+
         ProductEntity saved = productRepo.save(updated);
         return toResponseDto(saved);
     }
 
     @Override
-    public void delete(Long id) {
-        if (!productRepo.existsById(id)) {
-            throw new NotFoundException("Producto no encontrado con ID: " + id);
-        }
+    public void delete(Long id, UserDetailsImpl currentUser) {
+        ProductEntity product = productRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Producto no encontrado con ID: " + id));
+
+        validateOwnership(product, currentUser);
+
         productRepo.deleteById(id);
     }
 
@@ -244,4 +255,27 @@ public class ProductServiceImpl implements ProductService {
         dto.categories = categoryDtos;
         return dto;
     }
+
+    private void validateOwnership(ProductEntity product, UserDetailsImpl currentUser) {
+
+        if (hasAnyRole(currentUser, "ROLE_ADMIN", "ROLE_MODERATOR")) {
+            return;
+        }
+
+        if (!product.getOwner().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("No puedes modificar productos ajenos");
+        }
+    }
+
+    private boolean hasAnyRole(UserDetailsImpl user, String... roles) {
+        for (String role : roles) {
+            for (GrantedAuthority authority : user.getAuthorities()) {
+                if (authority.getAuthority().equals(role)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 }

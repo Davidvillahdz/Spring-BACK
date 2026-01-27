@@ -8,6 +8,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Slice;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
+
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -21,8 +26,15 @@ public class ProductController {
                 this.productService = productService;
         }
 
-        // 1. ENDPOINT PAGE (Paginación normal con totales)
         @GetMapping
+        @PreAuthorize("hasRole('ADMIN')")
+        public ResponseEntity<List<ProductResponseDto>> findAll() {
+                List<ProductResponseDto> products = productService.findAllList();
+                return ResponseEntity.ok(products);
+        }
+
+        // 1. ENDPOINT PAGE (Paginación normal con totales)
+        @GetMapping("/paginated")
         public ResponseEntity<Page<ProductResponseDto>> getAllProducts(
                         @RequestParam(defaultValue = "0") int page,
                         @RequestParam(defaultValue = "10") int size,
@@ -83,13 +95,20 @@ public class ProductController {
         }
 
         @PutMapping("/{id}")
-        public ResponseEntity<ProductResponseDto> update(@PathVariable Long id, @RequestBody UpdateProductDto dto) {
-                return ResponseEntity.ok(productService.update(id, dto));
+        public ResponseEntity<ProductResponseDto> update(
+                        @PathVariable Long id,
+                        @Valid @RequestBody UpdateProductDto dto,
+                        @AuthenticationPrincipal UserDetailsImpl currentUser) {
+
+                ProductResponseDto updated = productService.update(id, dto, currentUser);
+                return ResponseEntity.ok(updated);
         }
 
         @DeleteMapping("/{id}")
-        public ResponseEntity<Void> delete(@PathVariable Long id) {
-                productService.delete(id);
+        public ResponseEntity<Void> delete(
+                        @PathVariable Long id,
+                        @AuthenticationPrincipal UserDetailsImpl currentUser) {
+                productService.delete(id, currentUser);
                 return ResponseEntity.noContent().build();
         }
 
@@ -97,4 +116,5 @@ public class ProductController {
         public ResponseEntity<List<ProductResponseDto>> getAllList() {
                 return ResponseEntity.ok(productService.findAllList());
         }
+
 }
